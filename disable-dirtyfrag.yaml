@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: disable-dirtyfrag
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: disable-dirtyfrag
+  namespace: disable-dirtyfrag
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: disable-dirtyfrag-privileged
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:privileged
+subjects:
+  - kind: ServiceAccount
+    name: disable-dirtyfrag
+    namespace: disable-dirtyfrag
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: disable-dirtyfrag
+  namespace: disable-dirtyfrag
+  labels:
+    app: disable-dirtyfrag
+spec:
+  selector:
+    matchLabels:
+      app: disable-dirtyfrag
+  template:
+    metadata:
+      labels:
+        app: disable-dirtyfrag
+    spec:
+      serviceAccountName: disable-dirtyfrag
+      tolerations:
+        - operator: Exists
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: disable-modules
+          image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+          command:
+            - /bin/sh
+            - "-c"
+            - |
+              printf 'install esp4 /bin/false\ninstall esp6 /bin/false\ninstall rxrpc /bin/false\n' > /host/etc/modprobe.d/dirtyfrag.conf
+              chroot /host rmmod esp4 esp6 rxrpc 2>/dev/null
+              echo "=== modprobe.d/dirtyfrag.conf ==="
+              cat /host/etc/modprobe.d/dirtyfrag.conf
+              echo "=== loaded modules check ==="
+              for mod in esp4 esp6 rxrpc; do
+                if chroot /host lsmod | grep -q "^${mod} "; then
+                  echo "WARNING: ${mod} is still loaded"
+                else
+                  echo "OK: ${mod} is not loaded"
+                fi
+              done
+              sleep infinity
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: host-root
+              mountPath: /host
+      volumes:
+        - name: host-root
+          hostPath:
+            path: /
