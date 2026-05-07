@@ -47,15 +47,26 @@ OK: rxrpc is not loaded
 
 **Only test on systems you are authorized to access.**
 
-Spin up a pod and run the exploit:
+The test pod uses a pre-built image (`quay.io/jbranham/disable-dirtyfrag:latest`) containing the compiled exploit and runs as non-root:
 
 ```sh
-oc run dirtyfrag-test --rm -it --restart=Never \
-  --image=registry.access.redhat.com/ubi9/ubi:latest \
-  -- bash -c "dnf install -y gcc git util-linux && git clone https://github.com/V4bel/dirtyfrag.git && cd dirtyfrag && gcc -O0 -Wall -o exp exp.c -lutil && ./exp"
+oc apply -f test-dirtyfrag.yaml && oc wait -n disable-dirtyfrag pod/dirtyfrag-test --for=condition=Ready --timeout=120s && oc attach -n disable-dirtyfrag -it dirtyfrag-test
 ```
 
-If the system is vulnerable, the exploit will succeed and grant a root shell. Apply the mitigation, then run the same command again — it should fail because the required kernel modules can no longer be loaded.
+Before the exploit you should see `uid=1000860000`. If the system is vulnerable, the exploit will escalate to `uid=0(root)`. Apply the mitigation, then run the test again — the exploit should fail because the required kernel modules can no longer be loaded.
+
+To rebuild the image:
+
+```sh
+podman build -t quay.io/jbranham/disable-dirtyfrag:latest .
+podman push quay.io/jbranham/disable-dirtyfrag:latest
+```
+
+Clean up the test pod:
+
+```sh
+oc delete -f test-dirtyfrag.yaml
+```
 
 ### Cleanup
 

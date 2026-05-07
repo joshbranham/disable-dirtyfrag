@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dirtyfrag-test
+  namespace: disable-dirtyfrag
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000860000
+  containers:
+    - name: exploit
+      image: quay.io/jbranham/disable-dirtyfrag:latest
+      command:
+        - bash
+        - "-c"
+        - |
+          echo "--- before exploit ---"
+          id
+          dirtyfrag
+      stdin: true
+      tty: true
