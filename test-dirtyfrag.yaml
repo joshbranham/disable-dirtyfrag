@@ -4,10 +4,22 @@ metadata:
   name: dirtyfrag-test
   namespace: disable-dirtyfrag
 spec:
+  serviceAccountName: disable-dirtyfrag
   restartPolicy: Never
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 1000860000
+  initContainers:
+    - name: load-modules
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+      command:
+        - /bin/sh
+        - "-c"
+        - |
+          echo "Pre-loading esp4 module for exploit test..."
+          chroot /host modprobe esp4 2>/dev/null && echo "esp4 loaded" || echo "esp4 load failed (module may be blocked by mitigation)"
+      securityContext:
+        privileged: true
+      volumeMounts:
+        - name: host-root
+          mountPath: /host
   containers:
     - name: exploit
       image: quay.io/jbranham/disable-dirtyfrag:latest
@@ -18,5 +30,12 @@ spec:
           echo "--- before exploit ---"
           id
           dirtyfrag
+      securityContext:
+        runAsUser: 1000860000
+        privileged: false
       stdin: true
       tty: true
+  volumes:
+    - name: host-root
+      hostPath:
+        path: /
